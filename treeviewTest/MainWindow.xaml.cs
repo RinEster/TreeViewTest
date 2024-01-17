@@ -23,7 +23,7 @@ namespace treeviewTest
     /// </summary>
     public partial class MainWindow : Window
     {
-        public static string ConnStr = "Data Source = DESKTOP-E6HKS9J\\SQLEXPRESS;Initial Catalog = \"CodeVerseLeesons\"; Integrated Security = True"; //строка одключения бд
+        public static string ConnStr = " Data Source = DESKTOP-E6HKS9J\\SQLEXPRESS;Initial Catalog = \"CodeVerseLeesons\"; Integrated Security = True"; //строка одключения бд
 
         public MainWindow()
         {
