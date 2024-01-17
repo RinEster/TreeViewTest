@@ -28,108 +28,100 @@ namespace treeviewTest
         public MainWindow()
         {
             InitializeComponent();
+            FillParetChildTree();
 
-            using (SqlConnection connection = new SqlConnection(ConnStr))
+
+        }
+
+        public void FillParetChildTree()
+        {
+            DataSet ds = GetCources();
+            var Items = new List<ItemInfo>();
+            var query = from ID in ds.Tables["TopicDirectory"].AsEnumerable()
+                        from ChildCategoryID in ds.Tables["ParentChildTree"].AsEnumerable()
+                        where (int)ID["ID"] == (int)ChildCategoryID["ChildID"]
+                        select new { Child = ChildCategoryID["ChildID"], Name = ID["Name"], Parent = ChildCategoryID["ParentID"]};
+
+            foreach (var item in query)
+            {
+                var items = new ItemInfo() { ChildId = Convert.ToInt32(item.Child), Name = Convert.ToString( item.Name), ParentId = Convert.ToInt32(item.Parent) };
+
+                Items.Add(items);
+            }
+
+            FillNode(Items, null);
+        }
+    
+
+        public void FillNode(List<ItemInfo> items, TreeViewItem node)
+
+        {
+
+            var parentId = node != null  ? (int)node.Tag : 0;
+
+            var nodesCollection = node != null ? node.Items : treeView.Items;
+
+            foreach (var item in items.Where(i => i.ParentId == parentId))
+            {
+
+                var newNode = new TreeViewItem { Header = item.Name, Tag = item.ChildId };
+                nodesCollection.Add(newNode);
+                FillNode(items, newNode);
+
+            }
+
+        }
+
+        public class ItemInfo
+        {
+            public int ChildId;
+            public int ParentId;
+            public string Name;
+        }
+
+        public DataSet GetCources()
+        {
+            SqlConnection connection = new SqlConnection(ConnStr);
+            string sqlCat = "SELECT * FROM TopicDirectory";
+
+            string sqlTrees = "SELECT * FROM ParentChildTree";
+
+            SqlDataAdapter da = new SqlDataAdapter(sqlCat, connection);
+
+            DataSet ds = new DataSet();
+
+            try
             {
                 connection.Open();
-                // Получение данных из таблицы ParentChildTree
-                string query = "SELECT P.ParentID, P.ChildID, P.HaveChild, T.ID FROM ParentChildTree P LEFT JOIN TopicDirectory T ON P.ChildID = T.ID";
-                SqlCommand command = new SqlCommand(query, connection);
-                SqlDataReader reader = command.ExecuteReader();
 
-                var treeNodes = new Dictionary<int, TreeViewItem>();
-                while (reader.Read())
-                {
-                    int parentID = reader.GetInt32(0);
-                    int childID = reader.GetInt32(1);
-                    bool haveChild = reader.GetBoolean(2);
-                    int childParentID = reader.IsDBNull(3) ? -1 : reader.GetInt32(3); // Если запись в TopicDirectory отсутствует, используем -1
+                // Заполнить DataSet
 
-                    TreeViewItem parentNode;
-                    if (!treeNodes.TryGetValue(parentID, out parentNode))
-                    {
-                        parentNode = new TreeViewItem { Header = $"Node {parentID}" };
-                        treeNodes[parentID] = parentNode;
-                    }
+                da.Fill(ds, "TopicDirectory");
 
-                    TreeViewItem childNode;
+                // Добавить таблицу products
 
-                    // Проверяем, является ли ChildID также ParentID
-                    if (childParentID == parentID)
-                    {
-                        childNode = new TreeViewItem { Header = $"Node {childID}" };
-                        if (haveChild)
-                        {
-                            var dummyNode = new TreeViewItem { Header = $"Node {childID}" };
-                            childNode.Items.Add(dummyNode); // Добавляем заглушку для дочернего узла
-                        }
-                        parentNode.Items.Add(childNode); // Добавляем на второй уровень
-                    }
-                    else
-                    {
-                        childNode = new TreeViewItem { Header = $"Node {childID}" };
-                        if (haveChild)
-                        {
-                            var dummyNode = new TreeViewItem { Header = "Loading..." };
-                            childNode.Items.Add(dummyNode); // Добавляем заглушку для дочернего узла
-                        }
-                        parentNode.Items.Add(childNode); // Добавляем на первый уровень
-                    }
+                da.SelectCommand.CommandText = sqlTrees;
 
-                }
+                da.Fill(ds, "ParentChildTree");
 
-                // Привязка структуры дерева к элементу управления TreeView
-                foreach (var node in treeNodes.Values)
-                {
-                    if (node.Parent == null)
-                    {
-                        treeView.Items.Add(node);
-                    }
-                }
-                reader.Close();
-                // Получение данных из таблицы TopicDirectory для соответствия с ParentID
-                string topicQuery = "SELECT ID, Name FROM TopicDirectory";
-                SqlCommand topicCommand = new SqlCommand(topicQuery, connection);
-                using (SqlDataReader topicReader = topicCommand.ExecuteReader())
-                {
-                    var topicNames = new Dictionary<int, string>();
-                    while (topicReader.Read())
-                    {
-                        int topicID = topicReader.GetInt32(0);
-                        string topicName = topicReader.GetString(1);
-                        topicNames[topicID] = topicName;
-                    }
-
-                    // Использование значений из TopicDirectory для замены названий узлов
-                    foreach (var node in treeNodes.Values)
-                    {
-                        UpdateNodeHeaders(node, topicNames); // Вызов рекурсивной функции для обновления названий узлов
-                    }
-                }
             }
-        }
-        void UpdateNodeHeaders(TreeViewItem node, Dictionary<int, string> topicNames)
-        {
-            if (node.Header != null)
+            finally
             {
-                string[] headerParts = node.Header.ToString().Split(' ');
-                if (headerParts.Length > 1)
-                {
-                    int id;
-                    if (int.TryParse(headerParts[1], out id))
-                    {
-                        if (topicNames.ContainsKey(id))
-                        {
-                            node.Header = topicNames[id];
-                        }
-                    }
-                }
+                connection.Close();
             }
-            foreach (TreeViewItem childNode in node.Items)
-            {
-                UpdateNodeHeaders(childNode, topicNames);
-            }
+
+            // Добавить отношение
+
+            DataRelation relat = new DataRelation("CourcesTrees",
+            ds.Tables["ParentChildTree"].Columns["ChildId"],
+            ds.Tables["TopicDirectory"].Columns["ID"]);
+
+            ds.Relations.Add(relat);
+
+            return ds;
         }
+
+
     }
 
 }
