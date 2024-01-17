@@ -23,7 +23,7 @@ namespace treeviewTest
     /// </summary>
     public partial class MainWindow : Window
     {
-        public static string ConnStr = " Data Source = DESKTOP-E6HKS9J\\SQLEXPRESS;Initial Catalog = \"CodeVerseLeesons\"; Integrated Security = True"; //строка одключения бд
+        public static string ConnStr = "Data Source = DESKTOP-E6HKS9J\\SQLEXPRESS;Initial Catalog = \"CodeVerseLeesons\"; Integrated Security = True"; //строка одключения бд
 
         public MainWindow()
         {
@@ -33,7 +33,7 @@ namespace treeviewTest
             {
                 connection.Open();
                 // Получение данных из таблицы ParentChildTree
-                string query = "SELECT ParentID, ChildID, HaveChild FROM ParentChildTree";
+                string query = "SELECT P.ParentID, P.ChildID, P.HaveChild, T.ID FROM ParentChildTree P LEFT JOIN TopicDirectory T ON P.ChildID = T.ID";
                 SqlCommand command = new SqlCommand(query, connection);
                 SqlDataReader reader = command.ExecuteReader();
 
@@ -43,6 +43,7 @@ namespace treeviewTest
                     int parentID = reader.GetInt32(0);
                     int childID = reader.GetInt32(1);
                     bool haveChild = reader.GetBoolean(2);
+                    int childParentID = reader.IsDBNull(3) ? -1 : reader.GetInt32(3); // Если запись в TopicDirectory отсутствует, используем -1
 
                     TreeViewItem parentNode;
                     if (!treeNodes.TryGetValue(parentID, out parentNode))
@@ -51,14 +52,29 @@ namespace treeviewTest
                         treeNodes[parentID] = parentNode;
                     }
 
-                    TreeViewItem childNode = new TreeViewItem { Header = $"Node {childID}" };
-                    parentNode.Items.Add(childNode);
+                    TreeViewItem childNode;
 
-                    //// Если у узла есть дочерние элементы, добавляем заглушку
-                    //if (haveChild)
-                    //{
-                    //    childNode.Items.Add(new TreeViewItem { Header = "Loading..." });
-                    //}
+                    // Проверяем, является ли ChildID также ParentID
+                    if (childParentID == parentID)
+                    {
+                        childNode = new TreeViewItem { Header = $"Node {childID}" };
+                        if (haveChild)
+                        {
+                            var dummyNode = new TreeViewItem { Header = $"Node {childID}" };
+                            childNode.Items.Add(dummyNode); // Добавляем заглушку для дочернего узла
+                        }
+                        parentNode.Items.Add(childNode); // Добавляем на второй уровень
+                    }
+                    else
+                    {
+                        childNode = new TreeViewItem { Header = $"Node {childID}" };
+                        if (haveChild)
+                        {
+                            var dummyNode = new TreeViewItem { Header = "Loading..." };
+                            childNode.Items.Add(dummyNode); // Добавляем заглушку для дочернего узла
+                        }
+                        parentNode.Items.Add(childNode); // Добавляем на первый уровень
+                    }
 
                 }
 
